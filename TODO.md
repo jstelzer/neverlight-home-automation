@@ -1,39 +1,26 @@
 # Remaining work.
 
-* See https://academy.networkchuck.com/blog/local-ai-voice-assistant
 
-* The docker compose stack:
+    * The docker compose stack:
 
-wire up webcam more permanently on linux box
+    wire up webcam more permanently on linux box
 
-home-assistant (share the tcp socket globally)
+    * Notes
 
-wyoming-satalite protocol
+    After looking at the AUR stuff I think I really, really want this to all be a docker-compose file.
+    Its easier to share, will break less stuff and wont fuck with the system python.
 
-ollama (enable gpu)
+    https://companion.home-assistant.io/
 
-iphone (get app working)
+    https://github.com/rhasspy/wyoming-satellite
 
+    I cant find docker images for 
+    https://github.com/rhasspy/wyoming-satellite.git
 
-* Notes
+## Fork all the things?
 
-After looking at the AUR stuff I think I really, really want this to all be a docker-compose file.
-Its easier to share, will break less stuff and wont fuck with the system python.
-
-https://walkergriggs.com/2022/12/03/pipewire_in_docker/
-
-https://stackoverflow.com/questions/70761192/docker-compose-equivalent-of-docker-run-gpu-all-option
-
-https://companion.home-assistant.io/
-
-https://wiki.archlinux.org/title/Home_Assistant
-
-https://github.com/rhasspy/wyoming-satellite
-
-I cant find docker images for 
-https://github.com/rhasspy/wyoming-satellite.git
-
-Build everything manually?
+Build everything manually? The images all want to use alsa stuff. I'm using pipewire and i'm not going back.
+That said, the dockerfiles are pretty straight forward.
 
 ```
 7354  git clone https://github.com/rhasspy/wyoming-satellite.git
@@ -49,3 +36,26 @@ Build everything manually?
 7369  cd wyoming-mic-external
 7370  docker build -t wyoming-mic-external:latest .
 ```
+
+Getting pipewire to work was fun. The default images all use ancient alsa stuff.
+Set some env vars and share the running socket. It works but I can't figure out how to get HA to talk to it.
+I also had to tweak the Dockerfiles of the wyoming containers to use pipewire instead of alsa. One thing at a time.
+
+If I can't get it to send audio to a remote socket, then this is likely going to get simplified WRT the compose file.
+
+```
+docker run --rm -it -e DISABLE_RTKIT=y -e XDG_RUNTIME_DIR=/tmp -e PIPEWIRE_RUNTIME_DIR=/tmp -e PULSE_RUNTIME_DIR=/tmp -v /dev/snd:/dev/snd -v /var/run/user/1000/pipewire-0:/tmp/pipewire-0 -v $PWD:/work --entrypoint bash satellite:latest
+```
+
+### Home Assistant Green
+
+Bought an appliance to just run HA and wyoming protocol on. Attached a cheap usb mic.
+Got voice recognition working and using an ollama llm for the conversation agent.
+
+However, I can trigger it and debug see it's doing all the steps including generating an audio file response.
+
+But no playback. I think I need to snag a cheap USB speaker as it looks like the sound output is expecting to play locally.
+
+However, the green has NO built in audio. This kind of doesn't make sense. I really wanted to route sound output via the wyoming protocol, but I don't undertand it enough to even know if that's possible.
+
+So, things are on hold a bit while I get sound output to a local speaker working.

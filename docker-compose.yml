@@ -1,61 +1,76 @@
 services:
-  homeassistant:
-    container_name: homeassistant
-    image: "ghcr.io/home-assistant/home-assistant:stable"
-    volumes:
-      - ./home_assistant_config:/config
-      - /etc/localtime:/etc/localtime:ro
-      - /run/dbus:/run/dbus:ro
-      - /var/run/docker.sock:/var/run/docker.sock:rw
-    restart: unless-stopped
-    privileged: true
-    network_mode: host
-  wakeword:
-    image: "rhasspy/wyoming-openwakeword"
-    ports:
-      - 10400:10400
-    command:
-      - "--preload-model"
-      - "ok_nabu"
-  microphone:
-    container_name: "microphone"
-    build: https://github.com/rhasspy/wyoming-mic-external.git
-    ports:
-      - "10600:10600"
-    devices:
-      - /dev/snd:/dev/snd
+  speech_to_text:
+    image: "rhasspy/wyoming-whisper"
     group_add:
-      - audio
-    command:
-      - "--device"
-      - "sysdefault"
-      - "--debug"
+      - video # for gpu decoding
+    ports:
+      - 10300:10300
+    volumes:
+      - ./speech_to_text:/data
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    command: [ "--model", "medium-int8", "--language", "en" ]      
+  text_to_speech:
+    image: "rhasspy/wyoming-piper"
+    ports:
+      - 10200:10200
+    volumes:
+      - ./text_to_speech:/data
+    command: ["--voice", "en_US-lessac-medium" ]      
   playback:
+    image: "playback:latest"
     container_name: "playback"
-    build: https://github.com/rhasspy/wyoming-snd-external.git
+    environment:
+      DISABLE_RTKIT: y
+      XDG_RUNTIME_DIR: /tmp
+      PIPEWIRE_RUNTIME_DIR: /tmp
+      PULSE_RUNTIME_DIR: /tmp
     ports:
       - "10601:10601"
     devices:
       - /dev/snd:/dev/snd
+    volumes:
+      - /var/run/user/1000/pipewire-0:/tmp/pipewire-0
     group_add:
       - audio
     command:
       - "--device"
-      - "sysdefault"
-      - "--debug"
-  satellite:
-    container_name: "satellite"
-    build: https://github.com/rhasspy/wyoming-satellite.git
-    ports:
-      - "10700:10700"
-    command:
-      - "--name"
-      - "my satellite"
-      - "--mic-uri"
-      - "tcp://microphone:10600"
-      - "--snd-uri"
-      - "tcp://playback:10601"
-      - "--debug"
+      - "default:CARD=USB"
+      - "--program"
+      - "pw-cat -p -"
+      - "--uri"
+      - "tcp://0.0.0.0:10601"
+    restart: unless-stopped
+#   satellite:
+#     image: "satellite:latest"
+# #    container_name: "satellite"
+# #    build: https://github.com/rhasspy/wyoming-satellite.git
+#     devices:
+#       - /dev/snd:/dev/snd
+#     volumes:
+#       - /var/run/user/1000/pipewire-0:/tmp/pipewire-0
+#     environment:
+#       DISABLE_RTKIT: y
+#       XDG_RUNTIME_DIR: /tmp
+#       PIPEWIRE_RUNTIME_DIR: /tmp
+#       PULSE_RUNTIME_DIR: /tmp
+#     ports:
+#       - "10700:10700"
+#     command:
+#       - "--name"
+#       - "satellite"
+#      - "--snd-uri"
+#      - "tcp://playback:10601"
+#       - "--mic-command"
+#       - "pw-record -"
+#       # - "--snd-command"
+#       # - "pw-cat -p -"
+#     restart: unless-stopped
+#     depends_on:
+#       - speech_to_text
+#       - text_to_speech
+#       - ollama
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -79,21 +94,6 @@ services:
     entrypoint: /bin/sh
     command:
       - "-c"
-      - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull llama3.2; OLLAMA_HOST=ollama:11434 ollama pull nomic-embed-text"
+      - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull llama3.2; "
     depends_on:
       - ollama
-  postgres:
-    image: postgres
-    container_name: postgres
-    volumes:
-      - "postgres-data:/var/lib/postgres/:delegated"
-    ports:
-      - "5432:5432"
-# TODO: bind mount this?
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-volumes:
-  postgres-data:
-    driver: local
