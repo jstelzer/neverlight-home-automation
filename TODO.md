@@ -63,3 +63,36 @@ So, things are on hold a bit while I get sound output to a local speaker working
 ### LobeChat
 
 File upload/RAG/knowlege management
+
+
+### Ollama
+
+Fix/update as approprate and tell emacs about it.
+
+pulling llama3:8b-instruct-q8_0
+pulling 11a9680b0168... 100% ▕████████████████▏ 8.5 GB                         
+
+pulling llama3:8b-instruct-q8_0
+pulling 11a9680b0168... 100% ▕████████████████▏ 8.5 GB                         
+
+pulling mistral:7b-instruct-v0.2-q6_K
+pulling 3678b2e574ad... 100% ▕████████████████▏ 5.9 GB                         
+
+-- seems like this is from nvidia and not hugging face
+pulling mixtral:8x7b-instruct-v0.1-q3_K_M-4k
+Error: pull model manifest: file does not exist
+
+pulling qwen2.5:3b
+pulling 5ee4f07cdb9b... 100% ▕████████████████▏ 1.9 GB                         
+
+pulling qwen2.5:3b
+pulling 5ee4f07cdb9b... 100% ▕████████████████▏ 1.9 GB                         
+
+pulling qwen2.5-coder:3b
+pulling 4a188102020e... 100% ▕████████████████▏ 1.9 GB                         
+
+pulling qwen2.5-coder:7b-instruct-q8_0
+pulling 24b532e52765... 100% ▕████████████████▏ 8.1 GB                         
+
+pulling zephyr:7b-beta-q6_K
+pulling bd76fa39fe71... 100% ▕████████████████▏ 5.9 GB                         
