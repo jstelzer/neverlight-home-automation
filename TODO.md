@@ -59,3 +59,7 @@ But no playback. I think I need to snag a cheap USB speaker as it looks like the
 However, the green has NO built in audio. This kind of doesn't make sense. I really wanted to route sound output via the wyoming protocol, but I don't undertand it enough to even know if that's possible.
 
 So, things are on hold a bit while I get sound output to a local speaker working.
+
+### LobeChat
+
+File upload/RAG/knowlege management
