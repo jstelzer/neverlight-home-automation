@@ -75,6 +75,8 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: unless-stopped
+    environment:
+      OLLAMA_ORIGINS: "*"
     ports:
       - 11434:11434
     volumes:
@@ -95,5 +97,14 @@ services:
     command:
       - "-c"
       - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull llama3.2; "
+    depends_on:
+      - ollama
+    #web chat
+  lobehub:
+    image: "lobehub/lobe-chat"
+    environment:
+      ACCESS_CODE: "TODO"
+    ports:
+      - "3210:3210"
     depends_on:
       - ollama
