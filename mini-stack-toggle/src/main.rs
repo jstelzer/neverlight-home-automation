@@ -10,7 +10,7 @@ fn main() {
     )
     .unwrap();
 
-    tray.add_label("Tray Label").unwrap();
+    tray.add_label("Ollama stack controller").unwrap();
 
     tray.add_menu_item("Status", || {
         println!("Get Status");
