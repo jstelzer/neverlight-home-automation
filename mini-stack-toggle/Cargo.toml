@@ -1,0 +1,11 @@
+[package]
+name = "HA-stack-toggle"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tray-item = { version = "0.10.0", features = ["libappindicator"] }
+gtk = "0.18"
+png = "0.16"

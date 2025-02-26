@@ -72,9 +72,6 @@ Fix/update as approprate and tell emacs about it.
 pulling llama3:8b-instruct-q8_0
 pulling 11a9680b0168... 100% ▕████████████████▏ 8.5 GB                         
 
-pulling llama3:8b-instruct-q8_0
-pulling 11a9680b0168... 100% ▕████████████████▏ 8.5 GB                         
-
 pulling mistral:7b-instruct-v0.2-q6_K
 pulling 3678b2e574ad... 100% ▕████████████████▏ 5.9 GB                         
 
@@ -96,3 +93,127 @@ pulling 24b532e52765... 100% ▕████████████████
 
 pulling zephyr:7b-beta-q6_K
 pulling bd76fa39fe71... 100% ▕████████████████▏ 5.9 GB                         
+
+
+### Remote Audio idea
+
+** Ellama:
+Here's a high-level guide on how to set up GStreamer and PipWire to
+stream audio from Home Assistant to your remote sound server using
+Docker Compose:
+
+*Docker Compose Setup*
+
+Create a new ~docker-compose.yml~ file with the following
+configuration:
+#+BEGIN_SRC yaml
+version: '3'
+
+services:
+  home-assistant:
+    image: homeassistant/home-assistant
+    volumes:
+      - ./config.yaml:/etc/homeassistant/config.yaml
+      - ./media:/var/lib/home-assistant/media
+    ports:
+      - "8125:8125"
+      - "5050:5050"
+
+  gstreamer:
+    image: linuxfoundation/gstreamer
+    volumes:
+      - ./gstreamer.conf:/etc/gstreamer/conf.d/gstreamer.conf
+    depends_on:
+      - home-assistant
+
+  pipewire:
+    image: alpine/pipewire
+    volumes:
+      - ./pipewire.conf:/etc/pipewire/pipewire.conf
+    depends_on:
+      - gstreamer
+#+END_SRC
+*GStreamer Configuration*
+
+Create a new file ~gstreamer.conf~ with the following content:
+#+BEGIN_SRC ini
+[main]
+enable-echo = true
+
+[elements source]
+type = audiofilesrc
+location = /path/to/audio/file.wav
+format = wav/24Stereo
+blocksize = 2048
+
+[elements sink]
+type = alsa-sink
+access=media.stream
+device="hw:0,0"
+channel-order=(int16)(int16)
+#+END_SRC
+This configuration tells GStreamer to:
+
+1. Use an audio file (~/path/to/audio/file.wav~) as the input source.
+2. Set the audio format to WAV with 24-bit stereo.
+3. Stream the audio using ALSA.
+
+*PipWire Configuration*
+
+Create a new file ~pipewire.conf~ with the following content:
+#+BEGIN_SRC ini
+[global]
+enable-echo = true
+
+[elements sink]
+type = alsa-sink
+access=media.stream
+device="hw:0,0"
+channel-order=(int16)(int16)
+
+[pulse]
+default-client = 1
+#+END_SRC
+This configuration tells PipWire to:
+
+1. Enable echo.
+2. Use ALSA as the output device (~hw:0,0~).
+3. Configure the default client to use ALSA.
+
+*Home Assistant Integration*
+
+In your ~home-assistant/config.yaml~ file, add the following
+configuration:
+#+BEGIN_SRC yaml
+audio:
+  - platform: gstreamer
+    name: remote_audio
+    stream_url: rtsp://remote_sound_server_ip:5050
+#+END_SRC
+This configuration tells Home Assistant to:
+
+1. Use GStreamer as the audio platform.
+2. Set up a streaming URL (~rtsp://~) pointing to your remote sound
+server.
+
+*Streaming Audio*
+
+When you want to play an audio response from Home Assistant, use the
+~play_audio~ command in your Home Assistant config file (e.g.,
+~config.yaml~). For example:
+#+BEGIN_SRC yaml
+audio:
+  - platform: media_player
+    name: remote_audio
+#+END_SRC
+This will stream the audio to your remote sound server.
+
+*Notes*
+
++ Make sure your remote sound server is running and configured
+correctly.
++ You may need to adjust the GStreamer configuration to match your
+specific audio requirements.
++ This setup assumes a basic audio streaming scenario; you can add
+more features, such as volume control or mute functionality, by
+extending this configuration.
