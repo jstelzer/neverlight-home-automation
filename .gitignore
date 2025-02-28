@@ -2,3 +2,4 @@ home_assistant_config
 speech_to_text
 text_to_speech
 .envrc
+mini-stack-toggle/target
