@@ -217,3 +217,9 @@ specific audio requirements.
 + This setup assumes a basic audio streaming scenario; you can add
 more features, such as volume control or mute functionality, by
 extending this configuration.
+
+### Setup casdoor
+
+Add postgres/minio to lobechat so we can do more interesting things with it.
+
+https://lobehub.com/docs/self-hosting/advanced/auth/next-auth/casdoor
