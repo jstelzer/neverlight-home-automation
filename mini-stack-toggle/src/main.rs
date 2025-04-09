@@ -44,10 +44,8 @@ fn get_status() -> Result<String, Box<dyn std::error::Error>> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
-        Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Command failed"
-        )))
+        let err = std::io::Error::new(std::io::ErrorKind::Other, "Command failed");
+        Err(Box::new(err))
     }
 }
 
@@ -61,9 +59,7 @@ fn toggle_stack() -> Result<(), Box<dyn std::error::Error>> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Command failed"
-        )))
+        let err = std::io::Error::new(std::io::ErrorKind::Other, "Command failed");
+        Err(Box::new(err))
     }
 }
