@@ -1,16 +1,14 @@
 use std::process::{Command, Stdio};
 use tray_item::{IconSource, TrayItem};
+use std::env;
 
-fn main() {
-    gtk::init().unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    gtk::init()?;
 
     let mut tray = TrayItem::new(
-        "Tray Example",
+        "Ollama stack controller",
         IconSource::Resource("utilities-system-monitor"),
-    )
-    .unwrap();
-
-    tray.add_label("Ollama stack controller").unwrap();
+    )?;
 
     tray.add_menu_item("Status", || {
         println!("Get Status");
@@ -18,8 +16,7 @@ fn main() {
             Ok(output) => println!("{}", output),
             Err(e) => eprintln!("Failed to get status: {}", e),
         }
-    })
-    .unwrap();
+    })?;
 
     tray.add_menu_item("Toggle on/off", || {
         println!("Stop/Start");
@@ -27,45 +24,46 @@ fn main() {
             Ok(_) => println!("Stack toggled successfully"),
             Err(e) => eprintln!("Failed to toggle stack: {}", e),
         }
-    })
-    .unwrap();
+    })?;
 
     tray.add_menu_item("Quit", || {
         gtk::main_quit();
-    })
-    .unwrap();
+    })?;
 
     gtk::main();
+    Ok(())
 }
 
-fn get_status() -> Result<String, std::io::Error> {
+fn get_status() -> Result<String, Box<dyn std::error::Error>> {
+    let home = env::var("HOME")?;
     let output = Command::new("bash")
-        .arg("/home/mental/projects/neverlight-home-automation/scripts/check_docker.sh")
+        .arg(format!("{}/projects/neverlight-home-automation/scripts/check_docker.sh", home))
         .stdout(Stdio::piped())
         .output()?;
     
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
-        Err(std::io::Error::new(
+        Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "Command failed",
-        ))
+            "Command failed"
+        )))
     }
 }
 
-fn toggle_stack() -> Result<(), std::io::Error> {
+fn toggle_stack() -> Result<(), Box<dyn std::error::Error>> {
+    let home = env::var("HOME")?;
     let output = Command::new("bash")
-        .arg("/home/mental/projects/neverlight-home-automation/scripts/control_docker.sh")
+        .arg(format!("{}/projects/neverlight-home-automation/scripts/control_docker.sh", home))
         .stdout(Stdio::piped())
         .output()?;
     
     if output.status.success() {
         Ok(())
     } else {
-        Err(std::io::Error::new(
+        Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "Command failed",
-        ))
+            "Command failed"
+        )))
     }
 }
