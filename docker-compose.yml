@@ -9,7 +9,6 @@ services:
       - ./speech_to_text:/data
     devices:
       - /dev/dri:/dev/dri
-      - /dev/kfd:/dev/kfd
     command: [ "--model", "medium-int8", "--language", "en" ]      
   text_to_speech:
     image: "rhasspy/wyoming-piper"
@@ -18,30 +17,30 @@ services:
     volumes:
       - ./text_to_speech:/data
     command: ["--voice", "en_US-lessac-medium" ]      
-  playback:
-    image: "playback:latest"
-    container_name: "playback"
-    environment:
-      DISABLE_RTKIT: y
-      XDG_RUNTIME_DIR: /tmp
-      PIPEWIRE_RUNTIME_DIR: /tmp
-      PULSE_RUNTIME_DIR: /tmp
-    ports:
-      - "10601:10601"
-    devices:
-      - /dev/snd:/dev/snd
-    volumes:
-      - /var/run/user/1000/pipewire-0:/tmp/pipewire-0
-    group_add:
-      - audio
-    command:
-      - "--device"
-      - "default:CARD=USB"
-      - "--program"
-      - "pw-cat -p -"
-      - "--uri"
-      - "tcp://0.0.0.0:10601"
-    restart: unless-stopped
+  # playback:
+  #   image: "playback:latest"
+  #   container_name: "playback"
+  #   environment:
+  #     DISABLE_RTKIT: y
+  #     XDG_RUNTIME_DIR: /tmp
+  #     PIPEWIRE_RUNTIME_DIR: /tmp
+  #     PULSE_RUNTIME_DIR: /tmp
+  #   ports:
+  #     - "10601:10601"
+  #   devices:
+  #     - /dev/snd:/dev/snd
+  #   volumes:
+  #     - /var/run/user/1000/pipewire-0:/tmp/pipewire-0
+  #   group_add:
+  #     - audio
+  #   command:
+  #     - "--device"
+  #     - "default:CARD=USB"
+  #     - "--program"
+  #     - "pw-cat -p -"
+  #     - "--uri"
+  #     - "tcp://0.0.0.0:10601"
+  #   restart: unless-stopped
 #   satellite:
 #     image: "satellite:latest"
 # #    container_name: "satellite"
@@ -81,13 +80,6 @@ services:
       - 11434:11434
     volumes:
       - ${HOME}/.ollama:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
   ollama-pull-llama:   
     image: ollama/ollama:latest
     container_name: ollama-pull-llama
@@ -103,7 +95,8 @@ services:
   lobehub:
     image: "lobehub/lobe-chat:latest"
     environment:
-      ACCESS_CODE: "TODO"
+      ACCESS_CODE: "lobe123"  # Change this to your preferred password
+      OLLAMA_PROXY_URL: "http://ollama:11434"
     ports:
       - "3210:3210"
     depends_on:
