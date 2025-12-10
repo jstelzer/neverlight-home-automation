@@ -1,86 +1,41 @@
 services:
-  speech_to_text:
-    image: "rhasspy/wyoming-whisper"
-    group_add:
-      - video # for gpu decoding
+  # mTLS Gateway
+  caddy:
+    image: caddy:latest
     ports:
-      - 10300:10300
+      - "9443:9443"   # Ollama mTLS
+      - "9444:9444"   # Lobehub mTLS
     volumes:
-      - ./speech_to_text:/data
-    devices:
-      - /dev/dri:/dev/dri
-    command: [ "--model", "medium-int8", "--language", "en" ]      
-  text_to_speech:
-    image: "rhasspy/wyoming-piper"
-    ports:
-      - 10200:10200
-    volumes:
-      - ./text_to_speech:/data
-    command: ["--voice", "en_US-lessac-medium" ]      
-  # playback:
-  #   image: "playback:latest"
-  #   container_name: "playback"
-  #   environment:
-  #     DISABLE_RTKIT: y
-  #     XDG_RUNTIME_DIR: /tmp
-  #     PIPEWIRE_RUNTIME_DIR: /tmp
-  #     PULSE_RUNTIME_DIR: /tmp
-  #   ports:
-  #     - "10601:10601"
-  #   devices:
-  #     - /dev/snd:/dev/snd
-  #   volumes:
-  #     - /var/run/user/1000/pipewire-0:/tmp/pipewire-0
-  #   group_add:
-  #     - audio
-  #   command:
-  #     - "--device"
-  #     - "default:CARD=USB"
-  #     - "--program"
-  #     - "pw-cat -p -"
-  #     - "--uri"
-  #     - "tcp://0.0.0.0:10601"
-  #   restart: unless-stopped
-#   satellite:
-#     image: "satellite:latest"
-# #    container_name: "satellite"
-# #    build: https://github.com/rhasspy/wyoming-satellite.git
-#     devices:
-#       - /dev/snd:/dev/snd
-#     volumes:
-#       - /var/run/user/1000/pipewire-0:/tmp/pipewire-0
-#     environment:
-#       DISABLE_RTKIT: y
-#       XDG_RUNTIME_DIR: /tmp
-#       PIPEWIRE_RUNTIME_DIR: /tmp
-#       PULSE_RUNTIME_DIR: /tmp
-#     ports:
-#       - "10700:10700"
-#     command:
-#       - "--name"
-#       - "satellite"
-#      - "--snd-uri"
-#      - "tcp://playback:10601"
-#       - "--mic-command"
-#       - "pw-record -"
-#       # - "--snd-command"
-#       # - "pw-cat -p -"
-#     restart: unless-stopped
-#     depends_on:
-#       - speech_to_text
-#       - text_to_speech
-#       - ollama
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ollama
+      - lobehub
+    restart: unless-stopped
+
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
-    restart: unless-stopped
-    environment:
-      OLLAMA_ORIGINS: "*"
-    ports:
-      - 11434:11434
+    # No external ports - only accessible via Caddy
+    expose:
+      - "11434"
     volumes:
-      - ${HOME}/.ollama:/root/.ollama
-  ollama-pull-llama:   
+      - /home/mental/.ollama:/root/.ollama
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "GPU-b04df65a-fa7f-44d8-6db2-6e8dea266ab8"
+      OLLAMA_ORIGINS: "*"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids:
+                - "GPU-b04df65a-fa7f-44d8-6db2-6e8dea266ab8"
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  ollama-pull-llama:
     image: ollama/ollama:latest
     container_name: ollama-pull-llama
     volumes:
@@ -91,13 +46,18 @@ services:
       - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull llama3.2; "
     depends_on:
       - ollama
-  #web chat
+
   lobehub:
     image: "lobehub/lobe-chat:latest"
+    # No external ports - only accessible via Caddy
+    expose:
+      - "3210"
     environment:
       ACCESS_CODE: "lobe123"  # Change this to your preferred password
       OLLAMA_PROXY_URL: "http://ollama:11434"
-    ports:
-      - "3210:3210"
     depends_on:
       - ollama
+
+volumes:
+  caddy_data:
+  caddy_config:

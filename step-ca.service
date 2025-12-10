@@ -1,0 +1,22 @@
+[Unit]
+Description=Smallstep CA - Neverlight PKI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=step
+Group=step
+Environment=STEPPATH=/home/step/.step
+ExecStart=/usr/bin/step-ca /home/step/.step/config/ca.json --password-file=/home/step/.step/secrets/password
+Restart=on-failure
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/step/.step/db
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
