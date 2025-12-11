@@ -14,7 +14,7 @@
 │                      Tailscale Mesh                             │
 │   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
 │   │  abyss   │  │maledic-  │  │ avernus  │  │   EC2    │       │
-│   │  (CA)    │  │  tion    │  │  (iOS)   │  │ (future) │       │
+│   │  (CA)    │  │  tion    │  │  (iOS)   │  │(verified)│       │
 │   └────┬─────┘  └──────────┘  └──────────┘  └──────────┘       │
 │        │                                                        │
 │        ▼                                                        │
@@ -357,7 +357,56 @@ Key points:
 - Client cert generated on malediction, signed by abyss CA
 - mTLS verified end-to-end: client presents cert → Caddy validates → proxies to Ollama
 
-### 5.3 For Workloads/Services
+### 5.3 Verified: EC2 (Private Subnet) → abyss
+
+**Tested 2025-12-11** - Full zero-trust chain from AWS:
+
+```
+EC2 (private subnet, no public IP, no SSH keys)
+  → NAT Gateway (outbound only)
+    → Tailscale mesh (identity: ip-10-100-2-171)
+      → abyss:9443 (Caddy mTLS gateway)
+        → client cert validated against step-ca root
+          → HTTP/2 200
+```
+
+**Setup via Terraform + userdata:**
+```bash
+# terraform/main.tf - VPC, IGW, NAT, private subnet, security group (outbound only)
+# ec2-userdata.sh - Tailscale + step-cli bootstrap on boot
+
+terraform apply -var="ami_id=ami-XXXXX" -var="userdata=$(cat ../ec2-userdata.sh)"
+```
+
+**On the EC2 instance:**
+```bash
+# Get cert from CA (via Tailscale)
+step-cli ca certificate "ec2.neverlight.local" ec2.crt ec2.key \
+  --provisioner "admin@neverlight.local"
+
+# Access Ollama via mTLS
+curl --cert ec2.crt --key ec2.key \
+     --cacert /root/.step/certs/root_ca.crt \
+     https://abyss.tailce879b.ts.net:9443/api/tags
+# HTTP/2 200
+
+[root@ip-10-100-2-171 ~]# curl -D /dev/stderr  --cert ec2.crt --key ec2.key --cacert /root/.step/certs/root_ca.crt https://abyss.tailce879b.ts.net:9443/api/tags
+HTTP/2 200
+alt-svc: h3=":9443"; ma=2592000
+server: Caddy
+content-length: 0
+date: Thu, 11 Dec 2025 00:13:01 GMT
+
+```
+
+**Key points:**
+- No inbound security group rules - Tailscale handles connectivity
+- No SSH keys needed - Tailscale SSH (`tailscale ssh root@<node>`)
+- Instance bootstraps to CA automatically via userdata
+- ARM64 Graviton (t4g.micro) - cheap and fast
+- Ephemeral Tailscale auth key - node auto-removes when terminated
+
+### 5.4 For Workloads/Services
 
 Same process - each workload gets its own certificate identity:
 
@@ -478,6 +527,8 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 | `gen-client-cert.sh` | Client certificate generation |
 | `step-ca.service` | Systemd unit file |
 | `PKI-SETUP.md` | This document |
+| `terraform/` | VPC + EC2 infrastructure |
+| `ec2-userdata.sh` | Tailscale + step-cli bootstrap script |
 
 ---
 
@@ -487,7 +538,7 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 - [x] Caddy mTLS gateway
 - [x] Client certificate authentication
 - [x] Test from malediction (Mac) - **Verified 2025-12-10**
-- [ ] Add EC2 instance to mesh
+- [x] Add EC2 instance to mesh - **Verified 2025-12-11**
 - [ ] Automatic cert renewal
 - [ ] Add SPIRE for workload attestation
 - [ ] SSH certificate authority
@@ -496,4 +547,4 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 ---
 
 *Document created: 2025-12-10*
-*Last verified working: 2025-12-10*
+*Last verified working: 2025-12-11 (EC2 mTLS)*
