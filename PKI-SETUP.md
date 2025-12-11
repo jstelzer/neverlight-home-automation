@@ -620,13 +620,13 @@ With SPIRE: EC2 instance gets attested by SPIRE agent ("I'm an AWS instance with
 
 ### SPIFFE IDs (Planned)
 
-| Workload | SPIFFE ID | Access |
-|----------|-----------|--------|
-| Ollama (local) | `spiffe://neverlight.local/workload/ollama` | - |
-| Lobehub (local) | `spiffe://neverlight.local/workload/lobehub` | ollama |
-| EC2 ephemeral | `spiffe://neverlight.local/workload/ec2-ephemeral` | ollama |
-| EC2 trusted | `spiffe://neverlight.local/workload/ec2-trusted` | ollama, postgres |
-| Human operator | Keep using step-ca client certs (mTLS) | everything |
+| Workload        | SPIFFE ID                                          | Access           |
+|-----------------|----------------------------------------------------|------------------|
+| Ollama (local)  | `spiffe://neverlight.local/workload/ollama`        | -                |
+| Lobehub (local) | `spiffe://neverlight.local/workload/lobehub`       | ollama           |
+| EC2 ephemeral   | `spiffe://neverlight.local/workload/ec2-ephemeral` | ollama           |
+| EC2 trusted     | `spiffe://neverlight.local/workload/ec2-trusted`   | ollama, postgres |
+| Human operator  | Keep using step-ca client certs (mTLS)             | everything       |
 
 ### Implementation Steps
 
