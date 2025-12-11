@@ -5,7 +5,7 @@
 set -e
 
 # --- CONFIG ---
-TAILSCALE_AUTH_KEY="tskey-auth-ks1SMfxh7F11CNTRL-6YtEF1KxZ8dHo1bJ7Dp69d66GbpADJ5G"  # Replace with your tskey-auth-...
+TAILSCALE_AUTH_KEY="tskey-auth-whatever"  # Replace with your tskey-auth-... single use, ephemeral is safest.
 CA_URL="https://abyss.tailce879b.ts.net:8443"
 CA_FINGERPRINT="6d3ba8bf6e28a21cc7307d70b622ef8f45e74a930aec3fc24a4a269f5af79d5b"
 
