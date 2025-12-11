@@ -573,9 +573,105 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 - [x] Test from malediction (Mac) - **Verified 2025-12-10**
 - [x] Add EC2 instance to mesh - **Verified 2025-12-10**
 - [x] Automatic cert renewal - systemd timer
-- [ ] Add SPIRE for workload attestation
+- [ ] Add SPIRE for workload attestation (see Phase 6 below)
 - [ ] SSH certificate authority
 - [ ] Casdoor for user identity (OIDC)
+
+---
+
+## Phase 6: SPIRE Workload Identity (Planned)
+
+**Goal:** Replace static client certs with attested workload identity. Workloads prove who they are based on *what* they are (container image, AWS instance, etc.), not pre-shared keys.
+
+### Why SPIRE?
+
+Current state: EC2 instance gets a client cert via `step-cli ca certificate`. Anyone with that cert can access Ollama. The cert is the identity.
+
+With SPIRE: EC2 instance gets attested by SPIRE agent ("I'm an AWS instance with this instance identity document"), receives a short-lived SVID, and that SVID determines access. No static keys to steal.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         abyss                                   │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
+│  │  step-ca    │  │ SPIRE Server│  │      Caddy Gateway      │ │
+│  │  (root CA)  │←─│ (upstream)  │  │  validates SVIDs        │ │
+│  └─────────────┘  └──────┬──────┘  └─────────────────────────┘ │
+│                          │                                      │
+│                   ┌──────┴──────┐                               │
+│                   │ SPIRE Agent │ ← Docker attestor             │
+│                   │ (workload   │   (attests ollama, lobehub)   │
+│                   │  API socket)│                               │
+│                   └─────────────┘                               │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     EC2 (ephemeral)                             │
+│  ┌─────────────┐                                                │
+│  │ SPIRE Agent │ ← AWS IID attestor                             │
+│  │             │   (proves "I'm this EC2 instance")             │
+│  └─────────────┘                                                │
+│        ↓                                                        │
+│  Gets SVID: spiffe://neverlight.local/workload/ec2-ephemeral    │
+│  Can access: Ollama ✓  Postgres ✗                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### SPIFFE IDs (Planned)
+
+| Workload | SPIFFE ID | Access |
+|----------|-----------|--------|
+| Ollama (local) | `spiffe://neverlight.local/workload/ollama` | - |
+| Lobehub (local) | `spiffe://neverlight.local/workload/lobehub` | ollama |
+| EC2 ephemeral | `spiffe://neverlight.local/workload/ec2-ephemeral` | ollama |
+| EC2 trusted | `spiffe://neverlight.local/workload/ec2-trusted` | ollama, postgres |
+| Human operator | Keep using step-ca client certs (mTLS) | everything |
+
+### Implementation Steps
+
+1. **Add SPIRE server to docker-compose**
+   - Configure step-ca as UpstreamAuthority (SPIRE gets certs from our existing CA)
+   - Or: let SPIRE run its own CA, federate trust
+
+2. **Add SPIRE agent with Docker attestor**
+   - Mount Docker socket for workload attestation
+   - Exposes Workload API via Unix socket
+
+3. **Create registration entries**
+   - Map Docker container selectors → SPIFFE IDs
+   - `docker:label:app:ollama` → `spiffe://neverlight.local/workload/ollama`
+
+4. **Configure Caddy for SVID validation**
+   - Option A: `spiffe-helper` sidecar fetches SVIDs, Caddy uses as client cert
+   - Option B: Caddy native SPIFFE support (newer)
+
+5. **EC2 attestation**
+   - Add AWS IID attestor to SPIRE server
+   - EC2 userdata installs SPIRE agent, bootstraps to abyss SPIRE server
+   - Registration entry: AWS IID selector → SPIFFE ID
+
+### Key Decisions (TBD)
+
+- [ ] SPIRE CA vs step-ca as upstream? (Upstream keeps single root of trust)
+- [ ] Caddy SPIFFE native vs spiffe-helper? (Native cleaner if supported)
+- [ ] How to handle human operators? (Keep mTLS client certs, or OIDC→SVID?)
+- [ ] Registration entry management - static config vs API?
+
+### Resources
+
+- SPIRE docs: https://spiffe.io/docs/latest/spire-about/
+- Docker attestor: https://github.com/spiffe/spire/blob/main/doc/plugin_agent_workloadattestor_docker.md
+- AWS IID attestor: https://github.com/spiffe/spire/blob/main/doc/plugin_server_nodeattestor_aws_iid.md
+- Caddy + SPIFFE: https://caddyserver.com/docs/caddyfile/directives/tls#client_auth (check `trust_pool spiffe`)
+
+### Testing Plan
+
+1. Get SPIRE server + agent running locally (docker-compose)
+2. Verify local workloads get SVIDs via `spire-agent api fetch`
+3. Add Caddy SVID validation, test with curl + SVID cert
+4. Spin up EC2, verify AWS IID attestation works
+5. Policy enforcement: EC2 can hit Ollama, cannot hit (future) Postgres
 
 ---
 
