@@ -538,7 +538,7 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 - [x] Caddy mTLS gateway
 - [x] Client certificate authentication
 - [x] Test from malediction (Mac) - **Verified 2025-12-10**
-- [x] Add EC2 instance to mesh - **Verified 2025-12-11**
+- [x] Add EC2 instance to mesh - **Verified 2025-12-10**
 - [ ] Automatic cert renewal
 - [ ] Add SPIRE for workload attestation
 - [ ] SSH certificate authority
@@ -547,4 +547,4 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 ---
 
 *Document created: 2025-12-10*
-*Last verified working: 2025-12-11 (EC2 mTLS)*
+*Last verified working: 2025-12-10 (EC2 mTLS)*
