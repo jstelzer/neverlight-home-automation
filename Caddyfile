@@ -1,0 +1,21 @@
+# Ollama API - mTLS required
+ollama.neverlight.local:9443 {
+    tls /certs/server.crt /certs/server.key {
+        client_auth {
+            mode require_and_verify
+            trust_pool file /certs/root_ca.crt
+        }
+    }
+    reverse_proxy ollama:11434
+}
+
+# Lobehub UI - mTLS required
+lobehub.neverlight.local:9444 {
+    tls /certs/server.crt /certs/server.key {
+        client_auth {
+            mode require_and_verify
+            trust_pool file /certs/root_ca.crt
+        }
+    }
+    reverse_proxy lobehub:3210
+}

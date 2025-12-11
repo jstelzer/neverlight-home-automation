@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Neverlight mTLS Certificate Renewal
+
+[Timer]
+# Run at 3am daily, with 1h randomized delay to avoid thundering herd
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

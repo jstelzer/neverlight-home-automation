@@ -443,22 +443,54 @@ sudo -u step tarsnap -c -f step-pki-$(date +%Y%m%d) /home/step/.step
 
 ## Certificate Renewal
 
-Certs are short-lived (24h max). For automated renewal:
+Certs are short-lived (24h max). Automated renewal is handled by systemd.
+
+### Setup Automated Renewal
+
+```bash
+# 1. Create password file (owned by root, readable by mental)
+sudo mkdir -p /etc/neverlight
+sudo bash -c 'echo "YOUR_PROVISIONER_PASSWORD" > /etc/neverlight/step-pw'
+sudo chmod 600 /etc/neverlight/step-pw
+sudo chown mental:mental /etc/neverlight/step-pw
+
+# 2. Install systemd units
+sudo cp scripts/neverlight-cert-renewal.service /etc/systemd/system/
+sudo cp scripts/neverlight-cert-renewal.timer /etc/systemd/system/
+
+# 3. Enable and start the timer
+sudo systemctl daemon-reload
+sudo systemctl enable neverlight-cert-renewal.timer
+sudo systemctl start neverlight-cert-renewal.timer
+
+# 4. Verify timer is active
+systemctl list-timers | grep neverlight
+```
 
 ### Manual Renewal
+
 ```bash
-./gen-certs.sh "<password>"
-docker compose restart caddy
+# With password argument
+./scripts/gen-certs.sh "<password>"
+
+# Or using password file (same as automated)
+./scripts/gen-certs.sh
 ```
 
-### Automated (cron)
+The script automatically restarts Caddy if it's running.
+
+### Check Renewal Logs
+
 ```bash
-# Add to crontab - renew daily at 3am
-0 3 * * * cd /path/to/neverlight-home-automation && ./gen-certs.sh "$(cat /path/to/pw)" && docker compose restart caddy
+journalctl -u neverlight-cert-renewal.service -f
 ```
 
-### Future: step-ca Renewal Daemon
-step-ca supports automatic renewal via `step ca renew`. TODO.
+### Test Renewal Manually
+
+```bash
+sudo systemctl start neverlight-cert-renewal.service
+systemctl status neverlight-cert-renewal.service
+```
 
 ---
 
@@ -517,18 +549,19 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 
 ## Files in This Directory
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Stack definition (Caddy + Ollama + Lobehub) |
-| `Caddyfile` | mTLS gateway configuration |
-| `certs/` | Certificates directory |
-| `init-ca.sh` | CA initialization script |
-| `gen-certs.sh` | Server certificate generation |
-| `gen-client-cert.sh` | Client certificate generation |
-| `step-ca.service` | Systemd unit file |
-| `PKI-SETUP.md` | This document |
-| `terraform/` | VPC + EC2 infrastructure |
-| `ec2-userdata.sh` | Tailscale + step-cli bootstrap script |
+| File                         | Purpose                                     |
+|------------------------------|---------------------------------------------|
+| `docker-compose.yml`         | Stack definition (Caddy + Ollama + Lobehub) |
+| `Caddyfile`                  | mTLS gateway configuration                  |
+| `certs/`                     | Certificates directory                      |
+| `scripts/init-ca.sh`         | CA initialization script                    |
+| `scripts/gen-certs.sh`       | Server certificate generation               |
+| `scripts/gen-client-cert.sh` | Client certificate generation               |
+| `scripts/step-ca.service`    | Systemd unit file                           |
+| `scripts/neverlight-cert-renewal.service` | Systemd service for cert renewal |
+| `scripts/neverlight-cert-renewal.timer`   | Systemd timer (daily at 3am)     |
+| `terraform/`                 | VPC + EC2 infrastructure                    |
+| `terraform/ec2-userdata.sh`  | Tailscale + step-cli bootstrap script       |
 
 ---
 
@@ -539,7 +572,7 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 - [x] Client certificate authentication
 - [x] Test from malediction (Mac) - **Verified 2025-12-10**
 - [x] Add EC2 instance to mesh - **Verified 2025-12-10**
-- [ ] Automatic cert renewal
+- [x] Automatic cert renewal - systemd timer
 - [ ] Add SPIRE for workload attestation
 - [ ] SSH certificate authority
 - [ ] Casdoor for user identity (OIDC)

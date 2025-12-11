@@ -1,0 +1,18 @@
+[Unit]
+Description=Neverlight mTLS Certificate Renewal
+After=network-online.target step-ca.service
+Wants=network-online.target
+Requires=step-ca.service
+
+[Service]
+Type=oneshot
+User=mental
+ExecStart=/home/mental/projects/neverlight-forge-env/neverlight-home-automation/scripts/gen-certs.sh
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/home/mental/projects/neverlight-forge-env/neverlight-home-automation/certs
+PrivateTmp=yes
