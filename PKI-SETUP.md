@@ -12,19 +12,19 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Tailscale Mesh                             │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│   │  abyss   │  │maledic-  │  │ avernus  │  │   EC2    │       │
-│   │  (CA)    │  │  tion    │  │  (iOS)   │  │(verified)│       │
-│   └────┬─────┘  └──────────┘  └──────────┘  └──────────┘       │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│   │  abyss   │  │maledic-  │  │ avernus  │  │   EC2    │        │
+│   │  (CA)    │  │  tion    │  │  (iOS)   │  │(verified)│        │
+│   └────┬─────┘  └──────────┘  └──────────┘  └──────────┘        │
 │        │                                                        │
 │        ▼                                                        │
-│   ┌─────────────────────────────────────────────────────┐      │
-│   │  step-ca (:8443)           Caddy Gateway            │      │
-│   │  ├─ ACME provisioner       ├─ :9443 → Ollama        │      │
-│   │  └─ JWK provisioner        └─ :9444 → Lobehub       │      │
-│   │                                                     │      │
-│   │  mTLS: client cert required for all services        │      │
-│   └─────────────────────────────────────────────────────┘      │
+│   ┌─────────────────────────────────────────────────────┐       │
+│   │  step-ca (:8443)           Caddy Gateway            │       │
+│   │  ├─ ACME provisioner       ├─ :9443 → Ollama        │       │
+│   │  └─ JWK provisioner        └─ :9444 → Lobehub       │       │
+│   │                                                     │       │
+│   │  mTLS: client cert required for all services        │       │
+│   └─────────────────────────────────────────────────────┘       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -432,12 +432,12 @@ sudo -u step tarsnap -c -f step-pki-$(date +%Y%m%d) /home/step/.step
 ```
 
 **Critical files:**
-| File | Purpose | Sensitivity |
-|------|---------|-------------|
-| `secrets/intermediate_ca_key` | CA signing key | CRITICAL |
-| `secrets/password` | Key encryption | CRITICAL |
-| `certs/root_ca.crt` | Trust anchor | Public |
-| `db/` | Cert database | Important |
+| File                          | Purpose        | Sensitivity |
+|-------------------------------|----------------|-------------|
+| `secrets/intermediate_ca_key` | CA signing key | CRITICAL    |
+| `secrets/password`            | Key encryption | CRITICAL    |
+| `certs/root_ca.crt`           | Trust anchor   | Public      |
+| `db/`                         | Cert database  | Important   |
 
 ---
 
