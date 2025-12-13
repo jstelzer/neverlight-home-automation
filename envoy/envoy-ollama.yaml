@@ -1,0 +1,124 @@
+# Envoy sidecar for Ollama
+# Terminates mTLS from workloads, proxies to ollama on localhost
+#
+# SPIFFE ID: spiffe://neverlight.local/workload/ollama
+# Authorized callers: lobehub (via SPIFFE ID matching)
+
+node:
+  id: ollama-sidecar
+  cluster: ollama
+
+static_resources:
+  listeners:
+    # Plaintext listener for Caddy/internal access
+    - name: internal_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 11435
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ollama_internal
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: ollama
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: local_ollama
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+    # mTLS listener - workloads connect here
+    - name: mtls_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 11434
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ollama
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: ollama
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: local_ollama
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificate_sds_secret_configs:
+                  - name: "spiffe://neverlight.local/workload/ollama"
+                    sds_config:
+                      api_config_source:
+                        api_type: GRPC
+                        transport_api_version: V3
+                        grpc_services:
+                          - envoy_grpc:
+                              cluster_name: spire_agent
+                validation_context_sds_secret_config:
+                  name: "spiffe://neverlight.local"
+                  sds_config:
+                    api_config_source:
+                      api_type: GRPC
+                      transport_api_version: V3
+                      grpc_services:
+                        - envoy_grpc:
+                            cluster_name: spire_agent
+
+  clusters:
+    # Local ollama (no TLS, same network)
+    - name: local_ollama
+      connect_timeout: 30s
+      type: STATIC
+      load_assignment:
+        cluster_name: local_ollama
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: ollama
+                      port_value: 11434
+
+    # SPIRE Agent for SDS
+    - name: spire_agent
+      connect_timeout: 5s
+      type: STATIC
+      http2_protocol_options: {}
+      load_assignment:
+        cluster_name: spire_agent
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    pipe:
+                      path: /tmp/spire-agent/public/api.sock
+
+admin:
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 9901
