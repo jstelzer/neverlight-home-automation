@@ -148,6 +148,9 @@ resource "aws_security_group" "tailscale" {
 # EC2 Instance
 # -----------------------------------------------------------------------------
 resource "aws_instance" "test" {
+  # I launched this in a private subnet as a worst case example.
+  # Ideally it would be in a public subnet with a public ip and direct connection would work.
+  # Nat gateways do hard nat.
   ami                    = var.ami_id
   instance_type          = "t4g.micro"  # ARM64 Graviton
   subnet_id              = aws_subnet.private.id

@@ -377,9 +377,17 @@ EC2 (private subnet, no public IP, no SSH keys)
 
 terraform apply -var="ami_id=ami-XXXXX" -var="userdata=$(cat ../ec2-userdata.sh)"
 ```
+**Access EC2 via tailscale ssh:**
+```bash
+tailscale ssh  root@100.102.221.50
+
+--- prompted to visit a url and do the OIDC thing
+-- drop to shell.
+```
 
 **On the EC2 instance:**
 ```bash
+# The user-data bootstrapped tailscale and step-ca
 # Get cert from CA (via Tailscale)
 step-cli ca certificate "ec2.neverlight.local" ec2.crt ec2.key \
   --provisioner "admin@neverlight.local"
@@ -397,6 +405,7 @@ server: Caddy
 content-length: 0
 date: Thu, 11 Dec 2025 00:13:01 GMT
 
+## Call from datacenter in virginia tunneled over wireguard used mtls to talk to a service running in my house. 
 ```
 
 **Key points:**
@@ -405,7 +414,7 @@ date: Thu, 11 Dec 2025 00:13:01 GMT
 - Instance bootstraps to CA automatically via userdata
 - ARM64 Graviton (t4g.micro) - cheap and fast
 - Ephemeral Tailscale auth key - node auto-removes when terminated
-
+- Hard NAT means this went thru a DERP server.  Public IP would solve direct connectivity. Even with no open ports.
 ### 5.4 For Workloads/Services
 
 Same process - each workload gets its own certificate identity:
@@ -549,19 +558,19 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 
 ## Files in This Directory
 
-| File                         | Purpose                                     |
-|------------------------------|---------------------------------------------|
-| `docker-compose.yml`         | Stack definition (Caddy + Ollama + Lobehub) |
-| `Caddyfile`                  | mTLS gateway configuration                  |
-| `certs/`                     | Certificates directory                      |
-| `scripts/init-ca.sh`         | CA initialization script                    |
-| `scripts/gen-certs.sh`       | Server certificate generation               |
-| `scripts/gen-client-cert.sh` | Client certificate generation               |
-| `scripts/step-ca.service`    | Systemd unit file                           |
-| `scripts/neverlight-cert-renewal.service` | Systemd service for cert renewal |
-| `scripts/neverlight-cert-renewal.timer`   | Systemd timer (daily at 3am)     |
-| `terraform/`                 | VPC + EC2 infrastructure                    |
-| `terraform/ec2-userdata.sh`  | Tailscale + step-cli bootstrap script       |
+| File                                      | Purpose                                     |
+|-------------------------------------------|---------------------------------------------|
+| `docker-compose.yml`                      | Stack definition (Caddy + Ollama + Lobehub) |
+| `Caddyfile`                               | mTLS gateway configuration                  |
+| `certs/`                                  | Certificates directory                      |
+| `scripts/init-ca.sh`                      | CA initialization script                    |
+| `scripts/gen-certs.sh`                    | Server certificate generation               |
+| `scripts/gen-client-cert.sh`              | Client certificate generation               |
+| `scripts/step-ca.service`                 | Systemd unit file                           |
+| `scripts/neverlight-cert-renewal.service` | Systemd service for cert renewal            |
+| `scripts/neverlight-cert-renewal.timer`   | Systemd timer (daily at 3am)                |
+| `terraform/`                              | VPC + EC2 infrastructure                    |
+| `terraform/ec2-userdata.sh`               | Tailscale + step-cli bootstrap script       |
 
 ---
 
@@ -594,10 +603,10 @@ With SPIRE: EC2 instance gets attested by SPIRE agent ("I'm an AWS instance with
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         abyss                                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
-│  │  step-ca    │  │ SPIRE Server│  │      Caddy Gateway      │ │
-│  │  (root CA)  │←─│ (upstream)  │  │  validates SVIDs        │ │
-│  └─────────────┘  └──────┬──────┘  └─────────────────────────┘ │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │  step-ca    │  │ SPIRE Server│  │      Caddy Gateway      │  │
+│  │  (root CA)  │←─│ (upstream)  │  │  validates SVIDs        │  │
+│  └─────────────┘  └──────┬──────┘  └─────────────────────────┘  │
 │                          │                                      │
 │                   ┌──────┴──────┐                               │
 │                   │ SPIRE Agent │ ← Docker attestor             │
@@ -614,7 +623,7 @@ With SPIRE: EC2 instance gets attested by SPIRE agent ("I'm an AWS instance with
 │  └─────────────┘                                                │
 │        ↓                                                        │
 │  Gets SVID: spiffe://neverlight.local/workload/ec2-ephemeral    │
-│  Can access: Ollama ✓  Postgres ✗                               │
+│  Can access: Ollama ✓  Postgres ✗                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
