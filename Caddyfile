@@ -1,4 +1,6 @@
-# Ollama API - mTLS required
+# Ollama API - mTLS required (human identity via step-ca)
+# Routes to envoy-ollama's plaintext listener (11435)
+# Workloads use mTLS on 11434 directly via SPIRE SVIDs
 ollama.neverlight.local:9443 {
     tls /certs/server.crt /certs/server.key {
         client_auth {
@@ -6,10 +8,11 @@ ollama.neverlight.local:9443 {
             trust_pool file /certs/root_ca.crt
         }
     }
-    reverse_proxy ollama:11434
+    reverse_proxy envoy-ollama:11435
 }
 
-# Lobehub UI - mTLS required
+# Lobehub UI - mTLS required (human identity via step-ca)
+# Routes to lobehub via shared network namespace with envoy-lobehub
 lobehub.neverlight.local:9444 {
     tls /certs/server.crt /certs/server.key {
         client_auth {
@@ -17,5 +20,5 @@ lobehub.neverlight.local:9444 {
             trust_pool file /certs/root_ca.crt
         }
     }
-    reverse_proxy lobehub:3210
+    reverse_proxy envoy-lobehub:3210
 }

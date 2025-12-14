@@ -49,7 +49,7 @@ static_resources:
                             cluster_name: spire_agent
 
   clusters:
-    # Local postgres (no TLS, same pod/network namespace)
+    # Local postgres (no TLS, same network namespace via localhost)
     - name: local_postgres
       connect_timeout: 5s
       type: STATIC
@@ -60,7 +60,7 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: postgres
+                      address: 127.0.0.1
                       port_value: 5432
 
     # SPIRE Agent for SDS

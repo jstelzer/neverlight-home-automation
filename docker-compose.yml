@@ -1,39 +1,142 @@
 services:
+  # =============================================================================
+  # SPIRE - Workload Identity
+  # =============================================================================
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.11.0
+    hostname: spire-server
+    volumes:
+      - ./spire/server/server.conf:/opt/spire/conf/server/server.conf:ro
+      - ./spire/server/data:/opt/spire/data/server
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-server", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.11.0
+    hostname: spire-agent
+    depends_on:
+      spire-server:
+        condition: service_healthy
+    volumes:
+      - ./spire/agent/agent.conf:/opt/spire/conf/agent/agent.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./spire/agent/data:/opt/spire/data/agent
+      - ./spire/agent/socket:/tmp/spire-agent/public
+    command: ["-config", "/opt/spire/conf/agent/agent.conf"]
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-agent", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # Envoy Sidecars - mTLS enforcement layer
+  # Each sidecar owns its network namespace; workload shares it via network_mode
+  # =============================================================================
+
+  # Postgres sidecar - terminates mTLS, proxies to postgres
+  envoy-postgres:
+    image: envoyproxy/envoy:v1.28-latest
+    hostname: envoy-postgres
+    volumes:
+      - ./envoy/envoy-postgres.yaml:/etc/envoy/envoy.yaml:ro
+      - ./spire/agent/socket:/tmp/spire-agent/public:ro
+    labels:
+      - "spiffe.io/workload=postgres"
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9901/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    # Only exposed internally - no external ports
+    expose:
+      - "5432"
+    restart: unless-stopped
+
+  # Ollama sidecar - terminates mTLS, proxies to ollama
+  # Port 11434: mTLS listener for workload-to-workload (SPIRE SVIDs)
+  # Port 11435: Plaintext listener for Caddy (human identity via step-ca)
+  envoy-ollama:
+    image: envoyproxy/envoy:v1.28-latest
+    hostname: envoy-ollama
+    volumes:
+      - ./envoy/envoy-ollama.yaml:/etc/envoy/envoy.yaml:ro
+      - ./spire/agent/socket:/tmp/spire-agent/public:ro
+    labels:
+      - "spiffe.io/workload=ollama"
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9901/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    expose:
+      - "11434"  # mTLS (workload)
+      - "11435"  # Plaintext (Caddy)
+    restart: unless-stopped
+
+  # Lobehub sidecar - egress mTLS to ollama via SPIRE SVIDs
+  # Port 3210: Lobehub app (shared network namespace) - Caddy connects here
+  # Port 11434: Egress listener - lobehub's ollama requests go through here
+  envoy-lobehub:
+    image: envoyproxy/envoy:v1.28-latest
+    hostname: envoy-lobehub
+    volumes:
+      - ./envoy/envoy-lobehub.yaml:/etc/envoy/envoy.yaml:ro
+      - ./spire/agent/socket:/tmp/spire-agent/public:ro
+    labels:
+      - "spiffe.io/workload=lobehub"
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+      envoy-ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9901/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    expose:
+      - "3210"   # Lobehub app (Caddy connects here)
+    restart: unless-stopped
+
+  # =============================================================================
+  # Workloads - share network namespace with their sidecars
+  # =============================================================================
+
   postgres:
     image: postgres:latest
+    network_mode: "service:envoy-postgres"
     environment:
       - POSTGRES_USER=${POSTGRES_USERNAME}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"   # raw postgres
-      - "9432:9432"   # can we secure it?
-    restart: unless-stopped
-  # mTLS Gateway
-  caddy:
-    image: caddy:latest
-    ports:
-      - "9443:9443"   # Ollama mTLS
-      - "9444:9444"   # Lobehub mTLS
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./certs:/certs:ro
-      - caddy_data:/data
-      - caddy_config:/config
     depends_on:
-      - ollama
-      - lobehub
+      envoy-postgres:
+        condition: service_healthy
+    # No ports - only reachable via sidecar mTLS
     restart: unless-stopped
 
   ollama:
     image: ollama/ollama:latest
-    # No external ports - only accessible via Caddy
-    expose:
-      - "11434"
+    network_mode: "service:envoy-ollama"
     volumes:
       - /home/mental/.ollama:/root/.ollama
     environment:
       NVIDIA_VISIBLE_DEVICES: "GPU-b04df65a-fa7f-44d8-6db2-6e8dea266ab8"
       OLLAMA_ORIGINS: "*"
+      # Bind to localhost only - envoy owns external port 11434
+      OLLAMA_HOST: "127.0.0.1:11434"
     deploy:
       resources:
         reservations:
@@ -42,28 +145,54 @@ services:
               device_ids:
                 - "GPU-b04df65a-fa7f-44d8-6db2-6e8dea266ab8"
               capabilities: [gpu]
+    depends_on:
+      envoy-ollama:
+        condition: service_healthy
     restart: unless-stopped
 
+  lobehub:
+    image: "lobehub/lobe-chat:latest"
+    network_mode: "service:envoy-lobehub"
+    environment:
+      ACCESS_CODE: "lobe123"
+      # Points to local sidecar egress listener (shared network namespace)
+      OLLAMA_PROXY_URL: "http://127.0.0.1:11434"
+    depends_on:
+      envoy-lobehub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # Gateway - Human access (step-ca mTLS)
+  # =============================================================================
+  caddy:
+    image: caddy:latest
+    ports:
+      - "9443:9443"   # Ollama via Caddy (human mTLS)
+      - "9444:9444"   # Lobehub via Caddy (human mTLS)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      envoy-ollama:
+        condition: service_healthy
+      envoy-lobehub:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-time model pull (keep for convenience)
   ollama-pull-llama:
     image: ollama/ollama:latest
     container_name: ollama-pull-llama
+    network_mode: "service:envoy-ollama"
     volumes:
       - ${HOME}/.ollama:/root/.ollama
     entrypoint: /bin/sh
     command:
       - "-c"
-      - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull llama3.2; "
-    depends_on:
-      - ollama
-
-  lobehub:
-    image: "lobehub/lobe-chat:latest"
-    # No external ports - only accessible via Caddy
-    expose:
-      - "3210"
-    environment:
-      ACCESS_CODE: "lobe123"  # Change this to your preferred password
-      OLLAMA_PROXY_URL: "http://ollama:11434"
+      - "sleep 5; OLLAMA_HOST=127.0.0.1:11434 ollama pull llama3.2"
     depends_on:
       - ollama
 

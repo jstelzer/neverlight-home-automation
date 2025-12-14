@@ -582,107 +582,122 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 - [x] Test from malediction (Mac) - **Verified 2025-12-10**
 - [x] Add EC2 instance to mesh - **Verified 2025-12-10**
 - [x] Automatic cert renewal - systemd timer
-- [ ] Add SPIRE for workload attestation (see Phase 6 below)
+- [x] Add SPIRE for workload attestation (see Phase 6 below)
 - [ ] SSH certificate authority
 - [ ] Casdoor for user identity (OIDC)
 
 ---
 
-## Phase 6: SPIRE Workload Identity (Planned)
+## Phase 6: SPIRE Workload Identity
 
 **Goal:** Replace static client certs with attested workload identity. Workloads prove who they are based on *what* they are (container image, AWS instance, etc.), not pre-shared keys.
 
-### Why SPIRE?
+### Design Decision: Two Identity Planes
 
-Current state: EC2 instance gets a client cert via `step-cli ca certificate`. Anyone with that cert can access Ollama. The cert is the identity.
+**Decision:** SPIRE runs its own CA, separate from step-ca.
 
-With SPIRE: EC2 instance gets attested by SPIRE agent ("I'm an AWS instance with this instance identity document"), receives a short-lived SVID, and that SVID determines access. No static keys to steal.
+> *In production orgs, human and workload identity often have separate PKI roots for blast-radius isolation and organizational separation. Neverlight uses this model: step-ca handles human identity (operators, mTLS client certs), while SPIRE handles workload identity (attestation, SVIDs). This maps to how real organizations separate these concerns — different teams, different lifecycles, different threat models. Trust bundles are federated where needed (e.g., Envoy, gateways).*
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         abyss                                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │  step-ca    │  │ SPIRE Server│  │      Caddy Gateway      │  │
-│  │  (root CA)  │←─│ (upstream)  │  │  validates SVIDs        │  │
-│  └─────────────┘  └──────┬──────┘  └─────────────────────────┘  │
-│                          │                                      │
-│                   ┌──────┴──────┐                               │
-│                   │ SPIRE Agent │ ← Docker attestor             │
-│                   │ (workload   │   (attests ollama, lobehub)   │
-│                   │  API socket)│                               │
-│                   └─────────────┘                               │
+│                                                                 │
+│  ┌─────────────────┐        ┌─────────────────────────────────┐ │
+│  │    step-ca      │        │         SPIRE Server            │ │
+│  │  (human plane)  │        │       (workload plane)          │ │
+│  │                 │        │                                 │ │
+│  │  - operators    │        │  - Docker attestor              │ │
+│  │  - client certs │        │  - workload SVIDs               │ │
+│  │  - mTLS gateway │        │  - service-to-service auth      │ │
+│  └────────┬────────┘        └──────────────┬──────────────────┘ │
+│           │                                │                    │
+│           ▼                         ┌──────┴──────┐             │
+│     Caddy Gateway                   │ SPIRE Agent │             │
+│     (validates human certs)         └──────┬──────┘             │
+│                                            │                    │
+│                            ┌───────────────┼───────────────┐    │
+│                            ▼               ▼               ▼    │
+│                         ollama          lobehub        postgres │
+│                         (SVID)          (SVID)         (SVID)   │
 └─────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────────┐
-│                     EC2 (ephemeral)                             │
-│  ┌─────────────┐                                                │
-│  │ SPIRE Agent │ ← AWS IID attestor                             │
-│  │             │   (proves "I'm this EC2 instance")             │
-│  └─────────────┘                                                │
-│        ↓                                                        │
-│  Gets SVID: spiffe://neverlight.local/workload/ec2-ephemeral    │
-│  Can access: Ollama ✓  Postgres ✗                              │
-└─────────────────────────────────────────────────────────────────┘
+Identity Planes:
+  step-ca  → human identity (operators, mTLS client certs)
+  SPIRE    → workload identity (attestation, SVIDs)
 ```
 
-### SPIFFE IDs (Planned)
+### SPIFFE IDs
 
-| Workload        | SPIFFE ID                                          | Access           |
-|-----------------|----------------------------------------------------|------------------|
-| Ollama (local)  | `spiffe://neverlight.local/workload/ollama`        | -                |
-| Lobehub (local) | `spiffe://neverlight.local/workload/lobehub`       | ollama           |
-| EC2 ephemeral   | `spiffe://neverlight.local/workload/ec2-ephemeral` | ollama           |
-| EC2 trusted     | `spiffe://neverlight.local/workload/ec2-trusted`   | ollama, postgres |
-| Human operator  | Keep using step-ca client certs (mTLS)             | everything       |
+| Workload        | SPIFFE ID                                          | Selector                            |
+|-----------------|----------------------------------------------------|-------------------------------------|
+| Ollama          | `spiffe://neverlight.local/workload/ollama`        | `docker:label:spiffe.io/workload:ollama` |
+| Lobehub         | `spiffe://neverlight.local/workload/lobehub`       | `docker:label:spiffe.io/workload:lobehub` |
+| Postgres        | `spiffe://neverlight.local/workload/postgres`      | `docker:image_id:postgres`          |
+| EC2 ephemeral   | `spiffe://neverlight.local/workload/ec2-ephemeral` | AWS IID attestor (future)           |
+| Human operator  | N/A - uses step-ca client certs directly           | mTLS                                |
 
-### Implementation Steps
+### Quick Start
 
-1. **Add SPIRE server to docker-compose**
-   - Configure step-ca as UpstreamAuthority (SPIRE gets certs from our existing CA)
-   - Or: let SPIRE run its own CA, federate trust
+```bash
+cd /home/mental/projects/neverlight-forge-env/neverlight-home-automation
 
-2. **Add SPIRE agent with Docker attestor**
-   - Mount Docker socket for workload attestation
-   - Exposes Workload API via Unix socket
+# 1. Bootstrap SPIRE (starts server, agent, registers workloads)
+./scripts/spire-bootstrap.sh
 
-3. **Create registration entries**
-   - Map Docker container selectors → SPIFFE IDs
-   - `docker:label:app:ollama` → `spiffe://neverlight.local/workload/ollama`
+# 2. Verify SPIRE is running
+docker compose exec spire-server /opt/spire/bin/spire-server healthcheck
+docker compose exec spire-agent /opt/spire/bin/spire-agent healthcheck
 
-4. **Configure Caddy for SVID validation**
-   - Option A: `spiffe-helper` sidecar fetches SVIDs, Caddy uses as client cert
-   - Option B: Caddy native SPIFFE support (newer)
+# 3. List registered workloads
+docker compose exec spire-server /opt/spire/bin/spire-server entry show
+```
 
-5. **EC2 attestation**
-   - Add AWS IID attestor to SPIRE server
-   - EC2 userdata installs SPIRE agent, bootstraps to abyss SPIRE server
-   - Registration entry: AWS IID selector → SPIFFE ID
+### Files
 
-### Key Decisions (TBD)
+| File                                  | Purpose                               |
+|---------------------------------------|---------------------------------------|
+| `spire/server/server.conf`            | SPIRE server configuration            |
+| `spire/server/data/`                  | SPIRE server data (CA keys, database) |
+| `spire/agent/agent.conf`              | SPIRE agent configuration             |
+| `spire/agent/data/`                   | SPIRE agent data (persisted SVID)     |
+| `spire/agent/socket/`                 | Workload API socket                   |
+| `scripts/spire-bootstrap.sh`          | Full SPIRE bootstrap script           |
+| `scripts/spire-register-workloads.sh` | Register workloads with SPIRE         |
 
-- [ ] SPIRE CA vs step-ca as upstream? (Upstream keeps single root of trust)
-- [ ] Caddy SPIFFE native vs spiffe-helper? (Native cleaner if supported)
-- [ ] How to handle human operators? (Keep mTLS client certs, or OIDC→SVID?)
-- [ ] Registration entry management - static config vs API?
+### Verification
+
+```bash
+# Check SPIRE server health
+docker compose exec spire-server /opt/spire/bin/spire-server healthcheck
+
+# Check SPIRE agent health
+docker compose exec spire-agent /opt/spire/bin/spire-agent healthcheck
+
+# List registration entries
+docker compose exec spire-server /opt/spire/bin/spire-server entry show
+
+# Get SPIRE's trust bundle (its self-signed root)
+docker compose exec spire-server /opt/spire/bin/spire-server bundle show
+```
+
+### Next Steps
+
+- [ ] Add Envoy sidecar for workload-to-workload mTLS using SVIDs
+- [ ] Federate trust bundles (SPIRE bundle in Caddy for mixed auth)
+- [ ] Add AWS IID attestor for EC2 workloads
+- [ ] Policy enforcement (OPA): which SPIFFE IDs can access which services
 
 ### Resources
 
 - SPIRE docs: https://spiffe.io/docs/latest/spire-about/
 - Docker attestor: https://github.com/spiffe/spire/blob/main/doc/plugin_agent_workloadattestor_docker.md
 - AWS IID attestor: https://github.com/spiffe/spire/blob/main/doc/plugin_server_nodeattestor_aws_iid.md
-- Caddy + SPIFFE: https://caddyserver.com/docs/caddyfile/directives/tls#client_auth (check `trust_pool spiffe`)
-
-### Testing Plan
-
-1. Get SPIRE server + agent running locally (docker-compose)
-2. Verify local workloads get SVIDs via `spire-agent api fetch`
-3. Add Caddy SVID validation, test with curl + SVID cert
-4. Spin up EC2, verify AWS IID attestation works
-5. Policy enforcement: EC2 can hit Ollama, cannot hit (future) Postgres
+- SPIFFE Helper (sidecar for fetching SVIDs): https://github.com/spiffe/spiffe-helper
 
 ---
 
 *Document created: 2025-12-10*
 *Last verified working: 2025-12-10 (EC2 mTLS)*
+*SPIRE integration: 2025-12-13 (two identity planes: step-ca + SPIRE)*
