@@ -1,8 +1,14 @@
 # Envoy sidecar for Postgres
-# Terminates mTLS from workloads, proxies to postgres on localhost
+# Terminates mTLS, proxies to postgres on localhost
 #
-# SPIFFE ID: spiffe://neverlight.local/workload/postgres
-# Authorized callers: lobehub, ollama (via SPIFFE ID matching)
+# Two identity planes:
+#   Port 5432: Workload identity (SPIRE SVIDs)
+#              SPIFFE ID: spiffe://neverlight.local/workload/postgres
+#              Authorized callers: other workloads with valid SVIDs
+#
+#   Port 5433: Human identity (step-ca client certs)
+#              For operators using psql, DBeaver, DataGrip, etc.
+#              Authorized callers: anyone with valid step-ca client cert
 
 node:
   id: postgres-sidecar
@@ -10,8 +16,8 @@ node:
 
 static_resources:
   listeners:
-    # mTLS listener - workloads connect here
-    - name: mtls_listener
+    # Workload identity listener (SPIRE SVIDs)
+    - name: workload_mtls_listener
       address:
         socket_address:
           address: 0.0.0.0
@@ -21,7 +27,7 @@ static_resources:
             - name: envoy.filters.network.tcp_proxy
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
-                stat_prefix: postgres
+                stat_prefix: postgres_workload
                 cluster: local_postgres
           transport_socket:
             name: envoy.transport_sockets.tls
@@ -47,6 +53,36 @@ static_resources:
                       grpc_services:
                         - envoy_grpc:
                             cluster_name: spire_agent
+
+    # Human identity listener (step-ca client certs)
+    # Connect with: psql "host=localhost port=5433 sslmode=verify-full \
+    #                     sslcert=mental.crt sslkey=mental.key sslrootcert=root_ca.crt"
+    - name: human_mtls_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 5433
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: postgres_human
+                cluster: local_postgres
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              require_client_certificate: true
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /certs/server.crt
+                    private_key:
+                      filename: /certs/server.key
+                validation_context:
+                  trusted_ca:
+                    filename: /certs/root_ca.crt
 
   clusters:
     # Local postgres (no TLS, same network namespace via localhost)

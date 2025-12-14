@@ -5,6 +5,8 @@ services:
   spire-server:
     image: ghcr.io/spiffe/spire-server:1.11.0
     hostname: spire-server
+    networks:
+      - spire
     volumes:
       - ./spire/server/server.conf:/opt/spire/conf/server/server.conf:ro
       - ./spire/server/data:/opt/spire/data/server
@@ -19,6 +21,8 @@ services:
   spire-agent:
     image: ghcr.io/spiffe/spire-agent:1.11.0
     hostname: spire-agent
+    networks:
+      - spire
     depends_on:
       spire-server:
         condition: service_healthy
@@ -41,12 +45,18 @@ services:
   # =============================================================================
 
   # Postgres sidecar - terminates mTLS, proxies to postgres
+  # Two identity planes:
+  #   Port 5432: Workload identity (SPIRE SVIDs) - for service-to-service
+  #   Port 5433: Human identity (step-ca certs) - for psql, DBeaver, etc.
   envoy-postgres:
     image: envoyproxy/envoy:v1.28-latest
     hostname: envoy-postgres
+    networks:
+      - postgres
     volumes:
       - ./envoy/envoy-postgres.yaml:/etc/envoy/envoy.yaml:ro
       - ./spire/agent/socket:/tmp/spire-agent/public:ro
+      - ./certs:/certs:ro  # step-ca certs for human identity listener
     labels:
       - "spiffe.io/workload=postgres"
     depends_on:
@@ -57,9 +67,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    # Only exposed internally - no external ports
-    expose:
-      - "5432"
+    ports:
+      - "5432:5432"  # Workload mTLS (SPIRE SVIDs)
+      - "5433:5433"  # Human mTLS (step-ca certs)
     restart: unless-stopped
 
   # Ollama sidecar - terminates mTLS, proxies to ollama
@@ -68,6 +78,9 @@ services:
   envoy-ollama:
     image: envoyproxy/envoy:v1.28-latest
     hostname: envoy-ollama
+    networks:
+      - gateway   # Caddy connects here (plaintext :11435)
+      - workload  # envoy-lobehub connects here (mTLS :11434)
     volumes:
       - ./envoy/envoy-ollama.yaml:/etc/envoy/envoy.yaml:ro
       - ./spire/agent/socket:/tmp/spire-agent/public:ro
@@ -92,6 +105,9 @@ services:
   envoy-lobehub:
     image: envoyproxy/envoy:v1.28-latest
     hostname: envoy-lobehub
+    networks:
+      - gateway   # Caddy connects here (:3210)
+      - workload  # Egress to envoy-ollama (:11434 mTLS)
     volumes:
       - ./envoy/envoy-lobehub.yaml:/etc/envoy/envoy.yaml:ro
       - ./spire/agent/socket:/tmp/spire-agent/public:ro
@@ -118,6 +134,8 @@ services:
   postgres:
     image: postgres:latest
     network_mode: "service:envoy-postgres"
+    # Bind to localhost only - envoy owns external ports 5432/5433
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
     environment:
       - POSTGRES_USER=${POSTGRES_USERNAME}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -167,6 +185,8 @@ services:
   # =============================================================================
   caddy:
     image: caddy:latest
+    networks:
+      - gateway  # Only network Caddy can reach - envoy sidecars
     ports:
       - "9443:9443"   # Ollama via Caddy (human mTLS)
       - "9444:9444"   # Lobehub via Caddy (human mTLS)
@@ -199,3 +219,23 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+
+networks:
+  # SPIRE internal communication (server ↔ agent)
+  spire:
+    internal: true
+
+  # Human access via Caddy (step-ca mTLS)
+  # Caddy → envoy sidecars (plaintext listeners)
+  gateway:
+    internal: true
+
+  # Workload-to-workload mTLS (SPIRE SVIDs)
+  # envoy-lobehub → envoy-ollama
+  workload:
+    internal: true
+
+  # Postgres access (local abyss, EC2 POC)
+  # Isolated - only envoy-postgres lives here
+  postgres:
+    internal: true

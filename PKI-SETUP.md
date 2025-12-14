@@ -308,6 +308,84 @@ curl --cacert certs/root_ca.crt \
 # Error: tlsv13 alert certificate required
 ```
 
+### 4.7 Postgres Access (Human Identity)
+
+Postgres uses a **dual-listener pattern** on envoy-postgres:
+
+| Port | Identity Plane | Use Case                          |
+|------|----------------|-----------------------------------|
+| 5432 | SPIRE SVIDs    | Workload-to-workload (services)   |
+| 5433 | step-ca certs  | Human operators (psql, DBeaver)   |
+
+**How it works:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  psql / DBeaver / DataGrip                                      │
+│    sslcert=mental.crt    ← your step-ca client identity         │
+│    sslkey=mental.key                                            │
+│    sslrootcert=root_ca.crt                                      │
+└────────────────────────────────────────────────────────────────┬┘
+                                                                 │ mTLS
+                                                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  envoy-postgres:5433                                            │
+│    - Validates client cert against step-ca root                 │
+│    - Presents server.crt to client                              │
+│    - Transport authentication complete                          │
+└────────────────────────────────────────────────────────────────┬┘
+                                                                 │ plaintext
+                                                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  postgres:5432 (localhost, same network namespace)              │
+│    - Just sees local connection                                 │
+│    - Uses POSTGRES_USER/PASSWORD for DB auth                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Connect from abyss (local):**
+
+```bash
+# Using psql
+psql "host=localhost port=5433 \
+      sslmode=verify-full \
+      sslcert=certs/mental.crt \
+      sslkey=certs/mental.key \
+      sslrootcert=certs/root_ca.crt \
+      dbname=postgres user=postgres"
+
+# Or with environment variables
+export PGSSLMODE=verify-full
+export PGSSLCERT=certs/mental.crt
+export PGSSLKEY=certs/mental.key
+export PGSSLROOTCERT=certs/root_ca.crt
+psql -h localhost -p 5433 -U postgres
+```
+
+**Connect from EC2 (remote via Tailscale):**
+
+```bash
+# Assuming you've bootstrapped step-cli and have a client cert
+psql "host=abyss.tailce879b.ts.net port=5433 \
+      sslmode=verify-full \
+      sslcert=ec2.crt \
+      sslkey=ec2.key \
+      sslrootcert=~/.step/certs/root_ca.crt \
+      dbname=postgres user=postgres"
+```
+
+**GUI Clients (DBeaver, DataGrip):**
+
+1. Connection type: PostgreSQL
+2. Host: `localhost` (or `abyss.tailce879b.ts.net` for remote)
+3. Port: `5433`
+4. SSL Mode: `verify-full` or `require`
+5. SSL CA Certificate: `certs/root_ca.crt`
+6. SSL Client Certificate: `certs/mental.crt`
+7. SSL Client Key: `certs/mental.key`
+
+**Key insight:** The mTLS certs are for **transport authentication** (envoy validates you're a legitimate operator). Database authentication (username/password) is separate and handled by postgres itself.
+
 ---
 
 ## Phase 5: Adding Remote Nodes
@@ -542,6 +620,8 @@ step-cli certificate inspect certs/server.crt | grep -A10 "DNS Names"
 - step-ca: 8443
 - Caddy/Ollama: 9443
 - Caddy/Lobehub: 9444
+- Postgres (workload mTLS): 5432
+- Postgres (human mTLS): 5433
 
 ---
 
@@ -701,3 +781,4 @@ docker compose exec spire-server /opt/spire/bin/spire-server bundle show
 *Document created: 2025-12-10*
 *Last verified working: 2025-12-10 (EC2 mTLS)*
 *SPIRE integration: 2025-12-13 (two identity planes: step-ca + SPIRE)*
+*Postgres human access: 2025-12-14 (dual-listener pattern on envoy-postgres)*
