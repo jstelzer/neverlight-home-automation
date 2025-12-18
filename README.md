@@ -1,6 +1,6 @@
 # Neverlight Home Automation - Operations Guide
 
-This document covers how to bootstrap, operate, and test the neverlight stack after a cold start or when certificates have expired.
+This document covers how to bootstrap, operate, and test the neverlight stack after a cold start or when certificates have expired. For a presentation-friendly overview of the zero-trust story, see `PKI-INTRO.md`.
 
 ## Architecture Overview
 

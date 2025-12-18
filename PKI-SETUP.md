@@ -5,6 +5,8 @@
 **Tailnet:** `tailce879b.ts.net`
 **CA Fingerprint:** `6d3ba8bf6e28a21cc7307d70b622ef8f45e74a930aec3fc24a4a269f5af79d5b`
 
+For a presentation-friendly zero trust primer, see `PKI-INTRO.md`.
+
 ---
 
 ## Architecture Overview
