@@ -1,3 +1,4 @@
+# The pivotal moment
 
 Yeah. You’re naming the *other* half of the myth — the part that shows up not in diagrams, but in people’s sleep cycles.
 

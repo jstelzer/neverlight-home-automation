@@ -1,3 +1,5 @@
+# Summary
+
 That’s a great example of what actually works: you didn’t “teach Postgres,” you gave them a **stable mental model** they could use to reason, debug, and learn *independently*.
 
 You can absolutely do the same thing for zero trust / sidecars / SPIRE / Envoy / OPA. Here are a few analogies that land well with Linux operators, with the same “not perfect but useful” disclaimer baked in.
@@ -79,5 +81,3 @@ For sidecars, the “agency” part is:
 * “Want to know where traffic goes? Look at **Envoy routes/clusters**.”
 * “Want to know who a caller is? Look at **SPIFFE ID on the cert**.”
 * “Want to know why it was denied? Look at **OPA decision logs** (or Envoy RBAC logs).”
-
-If you want, I can help you write a short Rosetta Stone section in your voice—tight, blunt, with one diagram and 3–4 analogies—so someone new can go from “this is too hard” to “oh, it’s just chmod + ssh-config + reverse-proxy.”

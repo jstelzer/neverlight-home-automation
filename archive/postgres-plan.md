@@ -1,3 +1,5 @@
+# The plan
+
 Yep, exactly. You’ve basically stated the core principle:
 
 > **Apps shouldn’t need to know about TLS or identity;
@@ -144,12 +146,4 @@ So yeah: your instinct is spot-on.
 * **DB doesn’t care about SSL** → Envoy handles TCP identity.
 * **Workloads don’t manage certs** → SPIRE issues SVIDs.
 * **You care about identity & policy** → that’s defined once, in the trust layer.
-
-When you’re ready to actually write the Envoy bits, I can help you draft:
-
-* a minimal **L4 Envoy config** for Postgres with:
-
-  * SPIFFE-aware trust
-  * listener + cluster definitions
-  * an example RBAC filter to allow only specific SVIDs.
 

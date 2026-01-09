@@ -89,11 +89,3 @@ From here forward, the work is:
 You’ve already done the hardest part:
 **seeing the shape of the system.**
 
-When you’re ready to continue, we can:
-
-* refactor your Compose into a “Neverlight Secure Stack v1”
-* write a clean “Compose Sidecar Pattern” doc section
-* or map this exact model onto Kubernetes later without losing clarity
-
-But for now: you earned that clarity.
-

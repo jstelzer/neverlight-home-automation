@@ -1,3 +1,5 @@
+# How routing works (sidecars)
+
 Perfect — *this* is the last non-magical piece. You’re not missing TCP knowledge; you’re missing **where intent is expressed**.
 
 Short answer up front, then we’ll walk it slowly:

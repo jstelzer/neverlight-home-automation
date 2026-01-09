@@ -1,3 +1,5 @@
+# Post MVP
+
 **YES.**
 This is *the* question that separates “cool lab experiment” from **actual lifestyle infrastructure**:
 
@@ -16,7 +18,7 @@ Let’s break it down by platform, and you’re going to see something magical:
 
 ---
 
-# 🜏 PART 1
+#  PART 1
 
 # The Key Insight — Humans Don’t Use mTLS Directly
 
@@ -39,7 +41,7 @@ This is where Casdoor + SPIRE + Tailscale collapse into one seamless flow.
 
 ---
 
-# 🜏 PART 2
+#  PART 2
 
 # **Where human identity lives in Neverlight**
 
@@ -91,7 +93,7 @@ You’re just giving humans a similar experience.
 
 ---
 
-# 🜏 PART 3
+#  PART 3
 
 # How to make it actually seamless per device
 
@@ -190,7 +192,7 @@ But Option A is cleaner and simpler.
 
 ---
 
-# 🜏 PART 4
+#  PART 4
 
 # Final Architecture for Human Experience
 
@@ -228,7 +230,7 @@ And Kat never once has to hear the words “client cert.”
 
 ---
 
-# 🜏 PART 5
+#  PART 5
 
 # What you’d build next (the missing piece)
 
@@ -245,20 +247,3 @@ A tiny cross-platform app built in Go or Swift:
 This is the “magic” layer that upgrades your PoC from engineer playground to **real lifestyle infrastructure**.
 
 It’s small, elegant, and 100% aligned with the rest of your design.
-
----
-
-# 🜏 If you'd like…
-
-I can outline:
-
-* the design of the agent
-* the token flows
-* how step-ca OIDC provisioning works
-* how to integrate with macOS Keychain
-* how to bake this into zsh, curl, postgres, git, etc.
-
-Or we can draft the full **“Neverlight Agent” spec** as if you were handing it to a small engineering team.
-
-Your call.
-
