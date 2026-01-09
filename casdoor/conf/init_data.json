@@ -1,0 +1,66 @@
+{
+  "organizations": [
+    {
+      "owner": "admin",
+      "name": "neverlight",
+      "createdTime": "2024-01-01T00:00:00Z",
+      "displayName": "Neverlight",
+      "websiteUrl": "https://neverlight.local",
+      "passwordType": "plain",
+      "passwordOptions": ["AtLeast6"],
+      "countryCodes": ["US"],
+      "defaultAvatar": "https://cdn.casbin.org/img/casbin.svg",
+      "tags": [],
+      "languages": ["en"],
+      "masterPassword": "",
+      "enableSoftDeletion": false,
+      "isProfilePublic": false
+    }
+  ],
+  "users": [
+    {
+      "owner": "neverlight",
+      "name": "admin",
+      "createdTime": "2024-01-01T00:00:00Z",
+      "displayName": "Admin",
+      "email": "admin@neverlight.local",
+      "password": "neverlight-admin",
+      "type": "normal-user",
+      "isAdmin": true,
+      "isGlobalAdmin": false
+    },
+    {
+      "owner": "neverlight",
+      "name": "kat",
+      "createdTime": "2024-01-01T00:00:00Z",
+      "displayName": "Kat",
+      "email": "kat@neverlight.local",
+      "password": "CHANGE_ME",
+      "type": "normal-user",
+      "isAdmin": false,
+      "isGlobalAdmin": false
+    }
+  ],
+  "applications": [
+    {
+      "owner": "neverlight",
+      "name": "lobehub",
+      "createdTime": "2024-01-01T00:00:00Z",
+      "displayName": "Lobehub",
+      "logo": "https://lobehub.com/icons/icon-512x512.png",
+      "organization": "neverlight",
+      "enablePassword": true,
+      "enableSignUp": false,
+      "clientId": "943e627d79d5dd8a22a1",
+      "clientSecret": "6ec24ac304e92e160ef0d0656ecd86de8cb563f1",
+      "redirectUris": [
+        "https://lobehub.neverlight.local:9444/api/auth/callback/casdoor"
+      ],
+      "tokenFormat": "JWT",
+      "expireInHours": 24,
+      "refreshExpireInHours": 168,
+      "grantTypes": ["authorization_code", "refresh_token"],
+      "responseTypes": ["code"]
+    }
+  ]
+}

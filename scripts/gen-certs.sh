@@ -38,6 +38,7 @@ step-cli ca certificate \
   "$CERT_DIR/server.key" \
   --san "ollama.neverlight.local" \
   --san "lobehub.neverlight.local" \
+  --san "casdoor.neverlight.local" \
   --san "localhost" \
   --san "abyss" \
   --san "abyss.tailce879b.ts.net" \

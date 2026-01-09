@@ -108,6 +108,10 @@ services:
     networks:
       - gateway   # Caddy connects here (:3210)
       - workload  # Egress to envoy-ollama (:11434 mTLS)
+    # Allow lobehub to reach external URLs (for OIDC token exchange)
+    extra_hosts:
+      - "casdoor.neverlight.local:host-gateway"
+      - "lobehub.neverlight.local:host-gateway"
     volumes:
       - ./envoy/envoy-lobehub.yaml:/etc/envoy/envoy.yaml:ro
       - ./spire/agent/socket:/tmp/spire-agent/public:ro
@@ -171,13 +175,52 @@ services:
   lobehub:
     image: "lobehub/lobe-chat:latest"
     network_mode: "service:envoy-lobehub"
+    volumes:
+      # Trust our CA for OIDC calls to Casdoor
+      - ./certs/root_ca.crt:/etc/ssl/certs/neverlight-ca.crt:ro
     environment:
-      ACCESS_CODE: "lobe123"
       # Points to local sidecar egress listener (shared network namespace)
       OLLAMA_PROXY_URL: "http://127.0.0.1:11434"
+      # Trust our CA for Node.js HTTPS calls
+      NODE_EXTRA_CA_CERTS: "/etc/ssl/certs/neverlight-ca.crt"
+      # NextAuth configuration for OIDC
+      NEXT_AUTH_SECRET: "${NEXT_AUTH_SECRET}"
+      NEXTAUTH_URL: "https://lobehub.neverlight.local:9444"
+      # Casdoor OIDC provider
+      NEXT_AUTH_SSO_PROVIDERS: "casdoor"
+      AUTH_CASDOOR_ID: "${AUTH_CASDOOR_ID}"
+      AUTH_CASDOOR_SECRET: "${AUTH_CASDOOR_SECRET}"
+      # External URL for OIDC (matches token issuer claim)
+      AUTH_CASDOOR_ISSUER: "https://casdoor.neverlight.local:8443"
     depends_on:
       envoy-lobehub:
         condition: service_healthy
+    restart: unless-stopped
+
+  # =============================================================================
+  # Identity - Casdoor OIDC Provider
+  # =============================================================================
+  casdoor:
+    image: casbin/casdoor:latest
+    hostname: casdoor
+    networks:
+      gateway:
+        # Alias so other containers can reach it as casdoor.neverlight.local
+        aliases:
+          - casdoor.neverlight.local
+    environment:
+      # Use SQLite for simplicity (file stored in volume)
+      RUNNING_IN_DOCKER: "true"
+    volumes:
+      - ./casdoor/conf:/conf:ro
+      - casdoor_data:/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   # =============================================================================
@@ -189,7 +232,8 @@ services:
       - gateway  # Only network Caddy can reach - envoy sidecars
     ports:
       - "9443:9443"   # Ollama via Caddy (human mTLS)
-      - "9444:9444"   # Lobehub via Caddy (human mTLS)
+      - "9444:9444"   # Lobehub via Caddy (OIDC, no client cert)
+      - "8443:8443"   # Casdoor via Caddy (OIDC login UI)
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
@@ -199,6 +243,8 @@ services:
       envoy-ollama:
         condition: service_healthy
       envoy-lobehub:
+        condition: service_healthy
+      casdoor:
         condition: service_healthy
     restart: unless-stopped
 
@@ -219,6 +265,7 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  casdoor_data:
 
 networks:
   # SPIRE internal communication (server ↔ agent)

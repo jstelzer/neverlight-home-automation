@@ -1,6 +1,6 @@
 # Ollama API - mTLS required (human identity via step-ca)
 # Routes to envoy-ollama's plaintext listener (11435)
-# Workloads use mTLS on 11434 directly via SPIRE SVIDs
+# For operators, automation, and EC2 nodes with client certs
 ollama.neverlight.local:9443 {
     tls /certs/server.crt /certs/server.key {
         client_auth {
@@ -11,14 +11,17 @@ ollama.neverlight.local:9443 {
     reverse_proxy envoy-ollama:11435
 }
 
-# Lobehub UI - mTLS required (human identity via step-ca)
+# Lobehub UI - OIDC authentication (no client cert required)
+# Human identity via Casdoor OIDC instead of mTLS
 # Routes to lobehub via shared network namespace with envoy-lobehub
 lobehub.neverlight.local:9444 {
-    tls /certs/server.crt /certs/server.key {
-        client_auth {
-            mode require_and_verify
-            trust_pool file /certs/root_ca.crt
-        }
-    }
+    tls /certs/server.crt /certs/server.key
     reverse_proxy envoy-lobehub:3210
+}
+
+# Casdoor - OIDC Provider (no client cert required)
+# This is the login page - must be accessible without auth
+casdoor.neverlight.local:8443 {
+    tls /certs/server.crt /certs/server.key
+    reverse_proxy casdoor:8000
 }
